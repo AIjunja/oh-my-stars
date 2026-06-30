@@ -1,13 +1,7 @@
-import {
-  SIGNATURE_PATH,
-  SIGNATURE_VIEWBOX_HEIGHT,
-  SIGNATURE_VIEWBOX_WIDTH,
-} from '../signature'
-
 type CaptureNeonSelfieOptions = {
   video: HTMLVideoElement
   stage: HTMLElement
-  includeSignature: boolean
+  signatureCanvas: HTMLCanvasElement | null
 }
 
 type Point = [number, number]
@@ -29,7 +23,7 @@ const STAR_POINTS: Point[] = [
 export async function captureNeonSelfie({
   video,
   stage,
-  includeSignature,
+  signatureCanvas,
 }: CaptureNeonSelfieOptions) {
   if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     throw new Error('카메라 프레임이 아직 준비되지 않았어요.')
@@ -47,13 +41,10 @@ export async function captureNeonSelfie({
     throw new Error('캔버스를 만들지 못했어요.')
   }
 
-  drawMirroredCoverVideo(context, video, width, height)
+  drawMirroredContainVideo(context, video, width, height)
   drawStageLighting(context, width, height)
   drawStarCharacter(context, width, height)
-
-  if (includeSignature) {
-    drawNeonSignature(context, width, height)
-  }
+  drawSignatureCanvas(context, signatureCanvas, width, height)
 
   return canvasToPngBlob(canvas)
 }
@@ -69,7 +60,7 @@ export function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function drawMirroredCoverVideo(
+function drawMirroredContainVideo(
   context: CanvasRenderingContext2D,
   video: HTMLVideoElement,
   width: number,
@@ -82,34 +73,27 @@ function drawMirroredCoverVideo(
     throw new Error('카메라 해상도를 아직 읽지 못했어요.')
   }
 
-  const sourceRatio = videoWidth / videoHeight
-  const targetRatio = width / height
-  let sourceX = 0
-  let sourceY = 0
-  let sourceWidth = videoWidth
-  let sourceHeight = videoHeight
-
-  if (sourceRatio > targetRatio) {
-    sourceWidth = videoHeight * targetRatio
-    sourceX = (videoWidth - sourceWidth) / 2
-  } else {
-    sourceHeight = videoWidth / targetRatio
-    sourceY = (videoHeight - sourceHeight) / 2
-  }
+  const scale = Math.min(width / videoWidth, height / videoHeight)
+  const targetWidth = videoWidth * scale
+  const targetHeight = videoHeight * scale
+  const targetX = (width - targetWidth) / 2
+  const targetY = (height - targetHeight) / 2
 
   context.save()
-  context.translate(width, 0)
+  context.fillStyle = '#050711'
+  context.fillRect(0, 0, width, height)
+  context.translate(targetX + targetWidth, targetY)
   context.scale(-1, 1)
   context.drawImage(
     video,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
     0,
     0,
-    width,
-    height,
+    videoWidth,
+    videoHeight,
+    0,
+    0,
+    targetWidth,
+    targetHeight,
   )
   context.restore()
 }
@@ -240,48 +224,17 @@ function drawStarCharacter(
   context.restore()
 }
 
-function drawNeonSignature(
+function drawSignatureCanvas(
   context: CanvasRenderingContext2D,
+  signatureCanvas: HTMLCanvasElement | null,
   width: number,
   height: number,
 ) {
-  const boxWidth = width * 0.84
-  const boxHeight = height * 0.2
-  const x = width * 0.08
-  const y = height * 0.56
-  const path = new Path2D(SIGNATURE_PATH)
+  if (!signatureCanvas?.width || !signatureCanvas.height) {
+    return
+  }
 
-  context.save()
-  context.translate(x, y)
-  context.scale(
-    boxWidth / SIGNATURE_VIEWBOX_WIDTH,
-    boxHeight / SIGNATURE_VIEWBOX_HEIGHT,
-  )
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-
-  context.shadowBlur = 30
-  context.shadowColor = 'rgba(53, 231, 255, 0.9)'
-  context.strokeStyle = 'rgba(53, 231, 255, 0.72)'
-  context.lineWidth = 12
-  context.stroke(path)
-
-  context.shadowBlur = 22
-  context.shadowColor = 'rgba(255, 79, 184, 0.92)'
-  context.strokeStyle = '#ff4fb8'
-  context.lineWidth = 6
-  context.stroke(path)
-
-  context.shadowBlur = 8
-  context.shadowColor = 'rgba(255, 255, 255, 0.86)'
-  context.strokeStyle = '#fff3a8'
-  context.lineWidth = 2
-  context.stroke(path)
-
-  drawSparkle(context, 42, 22, 9, '#fff3a8')
-  drawSparkle(context, 244, 12, 11, '#35e7ff')
-  drawSparkle(context, 286, 74, 9, '#ff4fb8')
-  context.restore()
+  context.drawImage(signatureCanvas, 0, 0, width, height)
 }
 
 function drawPath(context: CanvasRenderingContext2D, points: Point[]) {
@@ -331,24 +284,6 @@ function drawCircle(
   context.beginPath()
   context.arc(x, y, radius, 0, Math.PI * 2)
   context.fill()
-}
-
-function drawSparkle(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  color: string,
-) {
-  context.save()
-  context.strokeStyle = color
-  context.lineWidth = 4
-  context.lineCap = 'round'
-  context.shadowColor = color
-  context.shadowBlur = 14
-  drawLine(context, x, y - radius, x, y + radius)
-  drawLine(context, x - radius, y, x + radius, y)
-  context.restore()
 }
 
 function roundedRect(
