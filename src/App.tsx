@@ -5,7 +5,6 @@ import type {
   ReactNode,
 } from 'react'
 import './App.css'
-import { VirtualStar } from './components/VirtualStar'
 import {
   captureNeonSelfie,
   downloadBlob,
@@ -13,46 +12,41 @@ import {
 } from './utils/capture'
 
 type CameraState = 'idle' | 'starting' | 'ready' | 'error'
+type CameraFacing = 'user' | 'environment'
 type RecordingState = 'idle' | 'recording' | 'finishing' | 'ready'
 type Language = 'ko' | 'en'
 
 const MAX_RECORDING_SECONDS = 180
 const RECORDING_FRAME_RATE = 30
 
-const cameraConstraints: MediaStreamConstraints = {
-  audio: false,
-  video: {
-    facingMode: { ideal: 'user' },
-  },
-}
-
 const copy = {
   ko: {
     title: '싸인해주세요!',
     langKo: '한',
     langEn: 'EN',
-    cameraStart: '카메라 시작',
     recordingStart: 'REC 시작',
     recordingStop: 'REC 중지',
     recordingAgain: '새 REC',
     recordingFinishing: '정리 중',
     recordingSave: '녹화 저장',
-    sign: '싸인 받기',
     selfie: '셀카 찍기',
+    switchToRear: '후면 전환',
+    switchToFront: '전면 전환',
+    switchingCamera: '전환 중',
     retake: '다시 찍기',
-    liveCamera: '라이브 셀피 카메라',
-    capturePanel: '네온 스타 싸인 셀피 촬영',
-    preview: '셀피 카메라 미리보기',
-    signatureCanvas: '직접 그리는 싸인 캔버스',
+    liveCamera: '라이브 카메라',
+    capturePanel: '네온 싸인 셀피 촬영',
+    preview: '카메라 미리보기',
+    signatureCanvas: '항상 그릴 수 있는 싸인 캔버스',
     controls: '촬영 제어',
     recordingReady: '녹화 저장 가능',
     recordingUnsupported:
       '이 브라우저는 녹화 저장을 지원하지 않아요. 최신 Chrome 또는 Edge에서 다시 시도해 주세요.',
     recordingError: '녹화 중 문제가 생겼어요. 다시 녹화해 주세요.',
     recordingNotReady: '저장할 녹화 파일이 아직 없어요.',
-    startCameraFirst: '먼저 카메라를 시작해 주세요.',
     cameraNotReady: '카메라가 준비된 뒤 찍을 수 있어요.',
-    signFirst: '싸인을 먼저 받아 주세요.',
+    switchCameraError:
+      '카메라 전환에 실패했어요. 이 기기나 브라우저가 전후면 전환을 제한할 수 있어요.',
     savePhotoError: '사진 저장 중 문제가 생겼어요.',
     noCameraApi: '이 브라우저는 카메라 API를 지원하지 않아요.',
     pngSaving: 'PNG 저장 중',
@@ -60,7 +54,7 @@ const copy = {
     signatureVisible: '네온 싸인 표시됨',
     cameraReady: '카메라 준비 완료',
     cameraStarting: '카메라 시작 중',
-    cameraIdle: '카메라 대기 중',
+    cameraIdle: '터치로 바로 싸인 가능',
     recordingStatus: '녹화 중',
     recordingDone: '녹화 저장 준비 완료',
     finishingRecording: '녹화 파일 정리 중',
@@ -75,28 +69,29 @@ const copy = {
     title: 'Sign, please!',
     langKo: '한',
     langEn: 'EN',
-    cameraStart: 'Start camera',
     recordingStart: 'Start REC',
     recordingStop: 'Stop REC',
     recordingAgain: 'New REC',
     recordingFinishing: 'Finishing',
     recordingSave: 'Save video',
-    sign: 'Get sign',
     selfie: 'Take selfie',
+    switchToRear: 'Rear camera',
+    switchToFront: 'Front camera',
+    switchingCamera: 'Switching',
     retake: 'Retake',
-    liveCamera: 'Live selfie camera',
-    capturePanel: 'Neon star sign selfie capture',
-    preview: 'Selfie camera preview',
-    signatureCanvas: 'Hand-drawn signature canvas',
+    liveCamera: 'Live camera',
+    capturePanel: 'Neon sign selfie capture',
+    preview: 'Camera preview',
+    signatureCanvas: 'Always-on signature canvas',
     controls: 'Capture controls',
     recordingReady: 'Video ready to save',
     recordingUnsupported:
       'This browser cannot save recordings. Please try the latest Chrome or Edge.',
     recordingError: 'Something went wrong while recording. Please try again.',
     recordingNotReady: 'There is no recording to save yet.',
-    startCameraFirst: 'Start the camera first.',
-    cameraNotReady: 'You can take a selfie after the camera is ready.',
-    signFirst: 'Please get a signature first.',
+    cameraNotReady: 'You can capture after the camera is ready.',
+    switchCameraError:
+      'Could not switch cameras. This device or browser may restrict front/rear switching.',
     savePhotoError: 'Something went wrong while saving the selfie.',
     noCameraApi: 'This browser does not support the camera API.',
     pngSaving: 'Saving PNG',
@@ -104,7 +99,7 @@ const copy = {
     signatureVisible: 'Neon signature visible',
     cameraReady: 'Camera ready',
     cameraStarting: 'Starting camera',
-    cameraIdle: 'Camera idle',
+    cameraIdle: 'Touch anywhere to sign',
     recordingStatus: 'Recording',
     recordingDone: 'Recording ready to save',
     finishingRecording: 'Preparing recording file',
@@ -122,6 +117,8 @@ function App() {
   const stageRef = useRef<HTMLDivElement>(null)
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const cameraFacingRef = useRef<CameraFacing>('user')
+  const isSwitchingCameraRef = useRef(false)
   const lastPointRef = useRef<{ x: number; y: number } | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordingCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -135,8 +132,9 @@ function App() {
 
   const [language, setLanguage] = useState<Language>('ko')
   const [cameraState, setCameraState] = useState<CameraState>('idle')
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('user')
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false)
   const [error, setError] = useState('')
-  const [isSigning, setIsSigning] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
@@ -242,6 +240,75 @@ function App() {
     }
   }, [])
 
+  const ensureCameraReady = useCallback(
+    async (targetFacing = cameraFacingRef.current, forceRestart = false) => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraState('error')
+        setError(t.noCameraApi)
+        return false
+      }
+
+      if (
+        !forceRestart &&
+        cameraState === 'ready' &&
+        streamRef.current &&
+        cameraFacingRef.current === targetFacing
+      ) {
+        return true
+      }
+
+      const isSwitch = Boolean(streamRef.current) || forceRestart
+      isSwitchingCameraRef.current = isSwitch
+      setIsSwitchingCamera(isSwitch)
+      if (!isSwitch) {
+        setCameraState('starting')
+      }
+      setError('')
+
+      try {
+        const nextStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: targetFacing },
+          },
+        })
+        const video = videoRef.current
+
+        if (!video) {
+          nextStream.getTracks().forEach((track) => track.stop())
+          throw new Error(t.cameraUnknown)
+        }
+
+        const previousStream = streamRef.current
+        streamRef.current = nextStream
+        video.srcObject = nextStream
+        video.muted = true
+        await video.play()
+        previousStream?.getTracks().forEach((track) => track.stop())
+
+        cameraFacingRef.current = targetFacing
+        setCameraFacing(targetFacing)
+        setCameraState('ready')
+        window.requestAnimationFrame(syncSignatureCanvas)
+        return true
+      } catch (cameraError) {
+        if (streamRef.current) {
+          setCameraState('ready')
+          setError(isSwitch ? t.switchCameraError : getCameraErrorMessage(cameraError, t))
+        } else {
+          setCameraState('error')
+          setError(getCameraErrorMessage(cameraError, t))
+        }
+
+        return false
+      } finally {
+        isSwitchingCameraRef.current = false
+        setIsSwitchingCamera(false)
+      }
+    },
+    [cameraState, syncSignatureCanvas, t],
+  )
+
   useEffect(() => {
     document.documentElement.lang = language
   }, [language])
@@ -281,60 +348,6 @@ function App() {
     }
   }, [syncSignatureCanvas])
 
-  const startCamera = useCallback(async () => {
-    if (cameraState === 'starting' || cameraState === 'ready') {
-      return
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraState('error')
-      setError(t.noCameraApi)
-      return
-    }
-
-    setCameraState('starting')
-    setError('')
-    setDownloaded(false)
-    setIsSigning(false)
-    setHasSignature(false)
-    lastPointRef.current = null
-    clearSignatureCanvas()
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints)
-      streamRef.current = stream
-
-      const video = videoRef.current
-      if (video) {
-        video.srcObject = stream
-        video.muted = true
-        await video.play()
-      }
-
-      setCameraState('ready')
-      window.requestAnimationFrame(syncSignatureCanvas)
-    } catch (cameraError) {
-      stopStream()
-      setCameraState('error')
-      setError(getCameraErrorMessage(cameraError, t))
-    }
-  }, [cameraState, clearSignatureCanvas, stopStream, syncSignatureCanvas, t])
-
-  const requestSignature = useCallback(() => {
-    if (cameraState !== 'ready') {
-      setError(t.startCameraFirst)
-      return
-    }
-
-    setError('')
-    setDownloaded(false)
-    setIsSigning(true)
-    setHasSignature(false)
-    lastPointRef.current = null
-    clearSignatureCanvas()
-    window.requestAnimationFrame(syncSignatureCanvas)
-  }, [cameraState, clearSignatureCanvas, syncSignatureCanvas, t])
-
   const triggerPhotoFlash = useCallback(() => {
     if (photoFlashTimerRef.current !== null) {
       window.clearTimeout(photoFlashTimerRef.current)
@@ -348,27 +361,24 @@ function App() {
   }, [])
 
   const savePhoto = useCallback(async () => {
+    setIsSaving(true)
+    setError('')
+
+    const cameraReady = await ensureCameraReady(cameraFacingRef.current)
     const video = videoRef.current
     const stage = stageRef.current
 
-    if (cameraState !== 'ready' || !video || !stage) {
-      setError(t.cameraNotReady)
+    if (!cameraReady || !video || !stage) {
+      setIsSaving(false)
       return
     }
-
-    if (!hasSignature) {
-      setError(t.signFirst)
-      return
-    }
-
-    setIsSaving(true)
-    setError('')
 
     try {
       const blob = await captureNeonSelfie({
         video,
         stage,
         signatureCanvas: signatureCanvasRef.current,
+        mirrorVideo: cameraFacingRef.current === 'user',
       })
       downloadBlob(blob, createPhotoFileName())
       setDownloaded(true)
@@ -378,14 +388,14 @@ function App() {
     } finally {
       setIsSaving(false)
     }
-  }, [cameraState, hasSignature, t, triggerPhotoFlash])
+  }, [ensureCameraReady, t, triggerPhotoFlash])
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
+    const cameraReady = await ensureCameraReady(cameraFacingRef.current)
     const video = videoRef.current
     const stage = stageRef.current
 
-    if (cameraState !== 'ready' || !video || !stage) {
-      setError(t.cameraNotReady)
+    if (!cameraReady || !video || !stage) {
       return
     }
 
@@ -413,6 +423,7 @@ function App() {
         signatureCanvas: signatureCanvasRef.current,
         canvas,
         scale: 1,
+        mirrorVideo: cameraFacingRef.current === 'user',
       })
     } catch (recordingError) {
       setError(
@@ -482,9 +493,15 @@ function App() {
           signatureCanvas: signatureCanvasRef.current,
           canvas,
           scale: 1,
+          mirrorVideo: cameraFacingRef.current === 'user',
         })
         recordingFrameRef.current = window.requestAnimationFrame(drawFrame)
       } catch (recordingError) {
+        if (isSwitchingCameraRef.current) {
+          recordingFrameRef.current = window.requestAnimationFrame(drawFrame)
+          return
+        }
+
         setError(
           recordingError instanceof Error
             ? recordingError.message
@@ -510,12 +527,17 @@ function App() {
       stopRecording()
     }, MAX_RECORDING_SECONDS * 1000)
   }, [
-    cameraState,
     clearRecordingResult,
+    ensureCameraReady,
     stopRecording,
     stopRecordingTimers,
     t,
   ])
+
+  const switchCamera = useCallback(async () => {
+    const nextFacing = cameraFacingRef.current === 'user' ? 'environment' : 'user'
+    await ensureCameraReady(nextFacing, true)
+  }, [ensureCameraReady])
 
   const saveRecording = useCallback(() => {
     const blob = recordingBlobRef.current
@@ -530,7 +552,6 @@ function App() {
   const retake = useCallback(() => {
     setError('')
     setDownloaded(false)
-    setIsSigning(false)
     setHasSignature(false)
     lastPointRef.current = null
     clearSignatureCanvas()
@@ -542,10 +563,6 @@ function App() {
 
   const beginDrawing = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      if (!isSigning || cameraState !== 'ready') {
-        return
-      }
-
       event.preventDefault()
       event.currentTarget.setPointerCapture(event.pointerId)
       syncSignatureCanvas()
@@ -558,12 +575,12 @@ function App() {
       }
       lastPointRef.current = point
     },
-    [cameraState, isSigning, syncSignatureCanvas],
+    [syncSignatureCanvas],
   )
 
   const drawSignature = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
-      if (!isSigning || cameraState !== 'ready' || !lastPointRef.current) {
+      if (!lastPointRef.current) {
         return
       }
 
@@ -585,7 +602,7 @@ function App() {
         setDownloaded(false)
       }
     },
-    [cameraState, downloaded, hasSignature, isSigning],
+    [downloaded, hasSignature],
   )
 
   const endDrawing = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -604,6 +621,12 @@ function App() {
         : hasRecording
           ? t.recordingAgain
           : t.recordingStart
+
+  const switchCameraLabel = isSwitchingCamera
+    ? t.switchingCamera
+    : cameraFacing === 'user'
+      ? t.switchToRear
+      : t.switchToFront
 
   const statusText = getStatusText({
     cameraState,
@@ -643,14 +666,16 @@ function App() {
         <div
           ref={stageRef}
           className={`camera-stage camera-stage--${cameraState} ${
-            isSigning ? 'camera-stage--signing' : ''
-          } ${isRecording ? 'camera-stage--recording' : ''}`}
+            isRecording ? 'camera-stage--recording' : ''
+          }`}
           aria-label={t.preview}
         >
           <div className="stage-backdrop" aria-hidden="true" />
           <video
             ref={videoRef}
-            className="camera-video"
+            className={`camera-video ${
+              cameraFacing === 'user' ? 'camera-video--mirrored' : ''
+            }`}
             autoPlay
             muted
             playsInline
@@ -658,7 +683,6 @@ function App() {
           />
           <div className="stage-shine" aria-hidden="true" />
           <div className="viewfinder" aria-hidden="true" />
-          <VirtualStar />
           {isRecording ? (
             <div className="recording-pill" aria-hidden="true">
               <span className="recording-dot" />
@@ -672,7 +696,7 @@ function App() {
           />
           <canvas
             ref={signatureCanvasRef}
-            className={`signature-canvas ${isSigning ? 'signature-canvas--active' : ''}`}
+            className="signature-canvas signature-canvas--active"
             aria-label={t.signatureCanvas}
             onPointerDown={beginDrawing}
             onPointerMove={drawSignature}
@@ -694,16 +718,10 @@ function App() {
 
         <div className="controls" aria-label={t.controls}>
           <ActionButton
-            onClick={startCamera}
-            disabled={cameraState === 'starting' || cameraState === 'ready'}
-            variant="cyan"
-            aria-busy={cameraState === 'starting'}
-          >
-            {t.cameraStart}
-          </ActionButton>
-          <ActionButton
             onClick={recordingState === 'recording' ? stopRecording : startRecording}
-            disabled={cameraState !== 'ready' || isPreparingRecording}
+            disabled={
+              cameraState === 'starting' || isPreparingRecording || isSwitchingCamera
+            }
             variant="red"
             aria-pressed={isRecording}
             aria-busy={isPreparingRecording}
@@ -711,26 +729,23 @@ function App() {
             {recordingButtonLabel}
           </ActionButton>
           <ActionButton
-            onClick={requestSignature}
-            disabled={cameraState !== 'ready'}
-            variant="pink"
-            aria-pressed={isSigning}
-          >
-            {t.sign}
-          </ActionButton>
-          <ActionButton
             onClick={savePhoto}
-            disabled={cameraState !== 'ready' || !hasSignature || isSaving}
+            disabled={isSaving || isPreparingRecording || isSwitchingCamera}
             variant="violet"
             aria-busy={isSaving}
           >
             {t.selfie}
           </ActionButton>
-          {hasRecording ? (
-            <ActionButton onClick={saveRecording} variant="green">
-              {t.recordingSave}
-            </ActionButton>
-          ) : null}
+          <ActionButton
+            onClick={switchCamera}
+            disabled={
+              cameraState === 'starting' || isPreparingRecording || isSwitchingCamera
+            }
+            variant="cyan"
+            aria-busy={isSwitchingCamera}
+          >
+            {switchCameraLabel}
+          </ActionButton>
           <ActionButton
             onClick={retake}
             disabled={cameraState === 'starting' || isRecording || isPreparingRecording}
@@ -738,6 +753,11 @@ function App() {
           >
             {t.retake}
           </ActionButton>
+          {hasRecording ? (
+            <ActionButton onClick={saveRecording} variant="green">
+              {t.recordingSave}
+            </ActionButton>
+          ) : null}
         </div>
 
         <span className="sr-only" aria-live="polite">
@@ -830,7 +850,7 @@ function drawSegment(
 
 type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode
-  variant: 'cyan' | 'pink' | 'violet' | 'ghost' | 'red' | 'green'
+  variant: 'cyan' | 'violet' | 'ghost' | 'red' | 'green'
 }
 
 function ActionButton({
@@ -948,13 +968,13 @@ function formatDuration(totalSeconds: number) {
 
 function createPhotoFileName() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  return `neon-star-selfie-${stamp}.png`
+  return `neon-sign-selfie-${stamp}.png`
 }
 
 function createRecordingFileName(mimeType: string) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const extension = mimeType.includes('mp4') ? 'mp4' : 'webm'
-  return `neon-star-rec-${stamp}.${extension}`
+  return `neon-sign-rec-${stamp}.${extension}`
 }
 
 export default App
