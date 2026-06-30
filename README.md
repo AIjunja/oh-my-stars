@@ -70,6 +70,8 @@ Direct Upload로 배포할 때는 프로젝트 루트가 아니라 아래 명령
 npm run build
 ```
 
+현재 Cloudflare Pages가 빌드 명령 없이 `wrangler.jsonc`의 `pages_build_output_dir`만 읽는 경우를 대비해, 이 저장소는 빌드된 `dist` 폴더도 함께 커밋합니다. Cloudflare 대시보드에서 빌드 명령을 비워둔 상태라면 최신 커밋의 `dist`가 그대로 배포됩니다.
+
 ## 안전한 에셋 사용
 
 이 MVP는 실제 연예인 이름, 얼굴, 사진, 저작권 캐릭터를 사용하지 않습니다. 화면의 스타는 단순 SVG/CSS로 만든 가상의 별 캐릭터입니다.
