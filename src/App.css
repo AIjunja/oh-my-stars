@@ -13,21 +13,53 @@
 
 .app-header {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 4px 0 12px;
 }
 
 .app-header h1 {
+  flex: 1;
   margin: 0;
   color: var(--text);
-  font-size: clamp(1.35rem, 5vw, 1.75rem);
-  font-weight: 850;
+  font-size: clamp(1.8rem, 8vw, 2.45rem);
+  font-weight: 400;
   line-height: 1.1;
   letter-spacing: 0;
-  text-align: center;
+  text-align: left;
   text-shadow:
     0 0 16px rgba(53, 231, 255, 0.42),
     0 0 24px rgba(255, 79, 184, 0.28);
+}
+
+.language-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(34px, 1fr));
+  min-width: 76px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.language-button {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.language-button--active {
+  color: #031017;
+  background: #35e7ff;
+  box-shadow: 0 0 18px rgba(53, 231, 255, 0.28);
 }
 
 .capture-panel {
@@ -109,6 +141,10 @@
     var(--shadow);
 }
 
+.camera-stage--recording {
+  border-color: rgba(255, 67, 102, 0.82);
+}
+
 .stage-shine {
   z-index: 3;
   pointer-events: none;
@@ -152,6 +188,10 @@
     drop-shadow(0 0 28px rgba(255, 79, 184, 0.34));
   transform-origin: center;
   animation: star-float 3.6s ease-in-out infinite;
+}
+
+.camera-stage--signing .virtual-star {
+  animation: star-sign 0.9s ease-in-out infinite;
 }
 
 .star-aura {
@@ -224,6 +264,61 @@
   touch-action: none;
 }
 
+.recording-pill {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 9;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 67, 102, 0.72);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(15, 3, 11, 0.72);
+  box-shadow: 0 0 22px rgba(255, 67, 102, 0.3);
+  font-size: 0.84rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.recording-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #ff4366;
+  box-shadow: 0 0 12px rgba(255, 67, 102, 0.95);
+  animation: rec-pulse 1s ease-in-out infinite;
+}
+
+.photo-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  background: #ffffff;
+}
+
+.photo-flash--active {
+  animation: photo-flash 260ms ease-out;
+}
+
+.recording-ready {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(72, 255, 173, 0.34);
+  border-radius: 8px;
+  color: #dbffed;
+  background: rgba(72, 255, 173, 0.11);
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
 .controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -237,7 +332,7 @@
   border-radius: 8px;
   color: var(--text);
   font-size: 1rem;
-  font-weight: 820;
+  font-weight: 400;
   letter-spacing: 0;
   cursor: pointer;
   transition:
@@ -280,6 +375,18 @@
   box-shadow: 0 0 28px rgba(139, 92, 255, 0.3);
 }
 
+.action-button--red {
+  color: #fff8fb;
+  background: linear-gradient(135deg, #ff4366, #ff8ba2);
+  box-shadow: 0 0 28px rgba(255, 67, 102, 0.32);
+}
+
+.action-button--green {
+  color: #03130b;
+  background: linear-gradient(135deg, #48ffad, #d6ffe9);
+  box-shadow: 0 0 28px rgba(72, 255, 173, 0.28);
+}
+
 .action-button--ghost {
   color: #f8fbff;
   background: rgba(255, 255, 255, 0.08);
@@ -294,7 +401,7 @@
   color: #fff6d7;
   background: rgba(255, 209, 102, 0.12);
   font-size: 0.9rem;
-  font-weight: 650;
+  font-weight: 400;
   line-height: 1.45;
 }
 
@@ -320,6 +427,44 @@
   }
 }
 
+@keyframes star-sign {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-7deg) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-8px, -7px, 0) rotate(5deg) scale(1.02);
+  }
+}
+
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.45;
+    transform: scale(0.78);
+  }
+}
+
+@keyframes photo-flash {
+  0% {
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.78;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
 @media (max-height: 720px) {
   .camera-stage {
     min-height: 320px;
@@ -327,7 +472,7 @@
 
   .action-button {
     min-height: 48px;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
   }
 }
 

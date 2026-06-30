@@ -4,6 +4,11 @@ type CaptureNeonSelfieOptions = {
   signatureCanvas: HTMLCanvasElement | null
 }
 
+type DrawNeonSelfieFrameOptions = CaptureNeonSelfieOptions & {
+  canvas: HTMLCanvasElement
+  scale?: number
+}
+
 type Point = [number, number]
 
 const CAPTURE_SCALE = 2
@@ -25,16 +30,37 @@ export async function captureNeonSelfie({
   stage,
   signatureCanvas,
 }: CaptureNeonSelfieOptions) {
+  const canvas = document.createElement('canvas')
+  drawNeonSelfieFrame({
+    video,
+    stage,
+    signatureCanvas,
+    canvas,
+    scale: CAPTURE_SCALE,
+  })
+
+  return canvasToPngBlob(canvas)
+}
+
+export function drawNeonSelfieFrame({
+  video,
+  stage,
+  signatureCanvas,
+  canvas,
+  scale = CAPTURE_SCALE,
+}: DrawNeonSelfieFrameOptions) {
   if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     throw new Error('카메라 프레임이 아직 준비되지 않았어요.')
   }
 
   const stageRect = stage.getBoundingClientRect()
-  const width = Math.max(1, Math.round(stageRect.width * CAPTURE_SCALE))
-  const height = Math.max(1, Math.round(stageRect.height * CAPTURE_SCALE))
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
+  const width = Math.max(1, Math.round(stageRect.width * scale))
+  const height = Math.max(1, Math.round(stageRect.height * scale))
+
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width
+    canvas.height = height
+  }
 
   const context = canvas.getContext('2d')
   if (!context) {
@@ -45,8 +71,6 @@ export async function captureNeonSelfie({
   drawStageLighting(context, width, height)
   drawStarCharacter(context, width, height)
   drawSignatureCanvas(context, signatureCanvas, width, height)
-
-  return canvasToPngBlob(canvas)
 }
 
 export function downloadBlob(blob: Blob, fileName: string) {
