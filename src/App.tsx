@@ -258,6 +258,9 @@ function App() {
       }
 
       const isSwitch = Boolean(streamRef.current) || forceRestart
+      const previousFacing = cameraFacingRef.current
+      const previousStream = streamRef.current
+      const previousDeviceId = getStreamDeviceId(previousStream)
       isSwitchingCameraRef.current = isSwitch
       setIsSwitchingCamera(isSwitch)
       if (!isSwitch) {
@@ -266,12 +269,12 @@ function App() {
       setError('')
 
       try {
-        const nextStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: targetFacing },
-          },
-        })
+        if (isSwitch) {
+          previousStream?.getTracks().forEach((track) => track.stop())
+          streamRef.current = null
+        }
+
+        const nextStream = await requestCameraStream(targetFacing, previousDeviceId)
         const video = videoRef.current
 
         if (!video) {
@@ -279,12 +282,10 @@ function App() {
           throw new Error(t.cameraUnknown)
         }
 
-        const previousStream = streamRef.current
         streamRef.current = nextStream
         video.srcObject = nextStream
         video.muted = true
         await video.play()
-        previousStream?.getTracks().forEach((track) => track.stop())
 
         cameraFacingRef.current = targetFacing
         setCameraFacing(targetFacing)
@@ -292,9 +293,27 @@ function App() {
         window.requestAnimationFrame(syncSignatureCanvas)
         return true
       } catch (cameraError) {
-        if (streamRef.current) {
-          setCameraState('ready')
-          setError(isSwitch ? t.switchCameraError : getCameraErrorMessage(cameraError, t))
+        if (isSwitch) {
+          try {
+            const restoredStream = await requestCameraStream(previousFacing)
+            const video = videoRef.current
+
+            if (video) {
+              streamRef.current = restoredStream
+              video.srcObject = restoredStream
+              video.muted = true
+              await video.play()
+              cameraFacingRef.current = previousFacing
+              setCameraFacing(previousFacing)
+            } else {
+              restoredStream.getTracks().forEach((track) => track.stop())
+            }
+          } catch {
+            streamRef.current = null
+          }
+
+          setCameraState(streamRef.current ? 'ready' : 'error')
+          setError(t.switchCameraError)
         } else {
           setCameraState('error')
           setError(getCameraErrorMessage(cameraError, t))
@@ -868,6 +887,84 @@ function ActionButton({
       {children}
     </button>
   )
+}
+
+async function requestCameraStream(
+  targetFacing: CameraFacing,
+  previousDeviceId?: string,
+) {
+  const errors: unknown[] = []
+  const constraints: MediaStreamConstraints[] = [
+    {
+      audio: false,
+      video: {
+        facingMode: { exact: targetFacing },
+      },
+    },
+  ]
+  const deviceId = await getPreferredCameraDeviceId(targetFacing, previousDeviceId)
+
+  if (deviceId) {
+    constraints.push({
+      audio: false,
+      video: {
+        deviceId: { exact: deviceId },
+      },
+    })
+  }
+
+  constraints.push({
+    audio: false,
+    video: {
+      facingMode: { ideal: targetFacing },
+    },
+  })
+
+  for (const constraint of constraints) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraint)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+
+  throw errors[0] ?? new Error('카메라를 시작하지 못했어요.')
+}
+
+async function getPreferredCameraDeviceId(
+  targetFacing: CameraFacing,
+  previousDeviceId?: string,
+) {
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    return ''
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const cameras = devices.filter((device) => device.kind === 'videoinput')
+    const labelPattern =
+      targetFacing === 'environment'
+        ? /(back|rear|environment|world|후면|뒤)/i
+        : /(front|user|face|전면|앞)/i
+    const labeledMatch = cameras.find(
+      (device) =>
+        device.deviceId !== previousDeviceId && labelPattern.test(device.label),
+    )
+
+    if (labeledMatch) {
+      return labeledMatch.deviceId
+    }
+
+    return (
+      cameras.find((device) => device.deviceId !== previousDeviceId)?.deviceId ?? ''
+    )
+  } catch {
+    return ''
+  }
+}
+
+function getStreamDeviceId(stream: MediaStream | null) {
+  return stream?.getVideoTracks()[0]?.getSettings().deviceId
 }
 
 function getCameraErrorMessage(error: unknown, t: (typeof copy)[Language]) {
