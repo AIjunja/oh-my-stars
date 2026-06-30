@@ -50,6 +50,26 @@ npm run build
 npm run lint
 ```
 
+## Cloudflare Pages 배포 설정
+
+Cloudflare Pages에서 GitHub 저장소를 연결해 배포할 때는 아래처럼 설정합니다.
+
+```text
+Framework preset: React (Vite) 또는 Vite
+Build command: npm run build
+Build output directory: dist
+Root directory: /
+Node.js version: 22.12.0 이상
+```
+
+이 저장소에는 Pages가 출력 폴더를 알 수 있도록 `wrangler.jsonc`의 `pages_build_output_dir`을 `./dist`로 지정해 두었습니다.
+
+Direct Upload로 배포할 때는 프로젝트 루트가 아니라 아래 명령으로 생성되는 `dist` 폴더 안의 파일들을 올려야 합니다.
+
+```bash
+npm run build
+```
+
 ## 안전한 에셋 사용
 
 이 MVP는 실제 연예인 이름, 얼굴, 사진, 저작권 캐릭터를 사용하지 않습니다. 화면의 스타는 단순 SVG/CSS로 만든 가상의 별 캐릭터입니다.
